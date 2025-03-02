@@ -3,7 +3,6 @@
 import streamlit as st
 import os
 import base64
-import tempfile
 
 
 def list_pdfs(folder):
@@ -12,12 +11,15 @@ def list_pdfs(folder):
 
 
 def display_pdf(pdf_path):
-    """Displays the selected PDF file inside Streamlit using base64 encoding."""
+    """Displays the selected PDF file inside
+    Streamlit using base64 encoding."""
     with open(pdf_path, "rb") as pdf_file:
-        base64_pdf = base64.b64encode(pdf_file.read()).decode("utf-8")
+        base64_pdf = base64.b64encode(
+            pdf_file.read()).decode("utf-8")
 
     pdf_display = f"""
-        <iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800px"></iframe>
+        <iframe src="data:application/pdf;base64,{base64_pdf}"
+        width="100%" height="800px"></iframe>
     """
     st.markdown(pdf_display, unsafe_allow_html=True)
 

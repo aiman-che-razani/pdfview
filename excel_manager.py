@@ -3,7 +3,7 @@
 import streamlit as st
 import pandas as pd
 import os
-from openpyxl import load_workbook, Workbook
+from openpyxl import load_workbook
 
 
 def list_excels(folder):
@@ -17,7 +17,8 @@ def load_excel(file_path):
 
 
 def save_excel(df, file_path, sheet_name):
-    """Saves only the modified sheet in the Excel file without affecting other sheets."""
+    """Saves only the modified sheet in the Excel
+    file without affecting other sheets."""
     workbook = load_workbook(file_path)
 
     if sheet_name in workbook.sheetnames:
@@ -49,7 +50,8 @@ def excel_manager_ui(folder):
     excel_files = list_excels(folder)
 
     if "selected_excel" not in st.session_state:
-        st.session_state.selected_excel = excel_files[0] if excel_files else None
+        st.session_state.selected_excel = excel_files[0] \
+            if excel_files else None
     if "selected_sheet" not in st.session_state:
         st.session_state.selected_sheet = None
 
@@ -126,7 +128,8 @@ def excel_manager_ui(folder):
 
         df = pd.DataFrame(data[1:], columns=new_columns)
 
-    edited_df = st.data_editor(df, num_rows="dynamic", key=f"editor_{selected_excel}_{selected_sheet}")
+    edited_df = st.data_editor(df, num_rows="dynamic",
+                               key=f"editor_{selected_excel}_{selected_sheet}")
 
     # **Column Management**
     st.subheader("Column Operations")
@@ -140,7 +143,8 @@ def excel_manager_ui(folder):
                 st.rerun()
 
     with col2:
-        columns_to_delete = st.multiselect("Select Columns to Delete", edited_df.columns)
+        columns_to_delete = st.multiselect("Select Columns to Delete",
+                                           edited_df.columns)
         if st.button("Delete Selected Columns"):
             edited_df.drop(columns=columns_to_delete, inplace=True)
             save_excel(edited_df, file_path, selected_sheet)
@@ -148,9 +152,11 @@ def excel_manager_ui(folder):
 
     with col3:
         rename_col = st.selectbox("Select Column to Rename", edited_df.columns)
-        rename_col_new = st.text_input("Rename Column To:", key="rename_column")
+        rename_col_new = st.text_input("Rename Column To:",
+                                       key="rename_column")
         if st.button("Rename Column"):
-            edited_df.rename(columns={rename_col: rename_col_new}, inplace=True)
+            edited_df.rename(columns={rename_col: rename_col_new},
+                             inplace=True)
             save_excel(edited_df, file_path, selected_sheet)
             st.rerun()
 
@@ -164,7 +170,9 @@ def excel_manager_ui(folder):
             st.rerun()
 
     with col5:
-        row_to_delete = st.number_input("Enter Row Index to Delete", min_value=0, max_value=max(len(edited_df) - 1, 0))
+        row_to_delete = st.number_input("Enter Row Index to Delete",
+                                        min_value=0,
+                                        max_value=max(len(edited_df) - 1, 0))
         if st.button("Delete Selected Row"):
             edited_df.drop(index=row_to_delete, inplace=True)
             edited_df.reset_index(drop=True, inplace=True)
@@ -181,15 +189,20 @@ def excel_manager_ui(folder):
 
             # Move headers to first row and insert new row
             df.iloc[0] = df.columns
-            df = pd.concat([df.iloc[:1], new_row, df.iloc[1:]]).reset_index(drop=True)
+            df = pd.concat([df.iloc[:1], new_row,
+                            df.iloc[1:]]).reset_index(drop=True)
 
-            # Rename column names to "Column X" (X = count of non-empty column names)
-            non_empty_columns = sum(1 for col in df.columns if col.strip())  # Count non-empty column names
-            df.columns = [f"Column {i + 1}" for i in range(non_empty_columns)]  # Rename dynamically
+            # Rename column names to "Column X"
+            # (X = count of non-empty column names)
+            non_empty_columns = sum(1 for col
+                                    in df.columns if col.strip())
+            # Count non-empty column names
+            df.columns = [f"Column {i + 1}" for i in range(
+                non_empty_columns)]  # Rename dynamically
 
             # Save back to Excel
             save_excel(df, file_path, selected_sheet)
-            st.success("Column values pushed and columns renamed to 'Column X'.")
+            st.success("Columns to first row successful")
             st.rerun()
 
     # Save Changes

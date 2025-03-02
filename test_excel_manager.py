@@ -1,8 +1,8 @@
-import os
 import pytest
 import pandas as pd
-from openpyxl import load_workbook, Workbook
+from openpyxl import Workbook
 from excel_manager import list_excels, load_excel, save_excel
+
 
 @pytest.fixture
 def setup_test_excel(tmp_path):
@@ -17,6 +17,7 @@ def setup_test_excel(tmp_path):
     wb.save(test_file)
     return test_file
 
+
 def test_list_excels(tmp_path):
     """Tests listing Excel files in a directory."""
     (tmp_path / "file1.xlsx").touch()
@@ -26,11 +27,13 @@ def test_list_excels(tmp_path):
     excel_files = list_excels(tmp_path)
     assert sorted(excel_files) == ["file1.xlsx", "file2.xls"]
 
+
 def test_load_excel(setup_test_excel):
     """Tests loading an Excel workbook."""
     wb = load_excel(str(setup_test_excel))
     assert isinstance(wb, Workbook)
     assert "Sheet1" in wb.sheetnames
+
 
 def test_save_excel(setup_test_excel):
     """Tests saving data to an Excel file without affecting other sheets."""
