@@ -3,7 +3,7 @@
 import streamlit as st
 import pandas as pd
 import os
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
 
 
 def list_excels(folder):
@@ -16,10 +16,26 @@ def load_excel(file_path):
     return load_workbook(file_path)
 
 
-def save_excel(workbook, file_path):
-    """Saves the modified workbook without deleting existing sheets."""
+def save_excel(df, file_path, sheet_name):
+    """Saves only the modified sheet in the Excel file without affecting other sheets."""
+    workbook = load_workbook(file_path)
+
+    if sheet_name in workbook.sheetnames:
+        sheet = workbook[sheet_name]
+        sheet.delete_rows(1, sheet.max_row)  # Clear only this sheet
+    else:
+        sheet = workbook.create_sheet(title=sheet_name)
+
+    # Write DataFrame back to the selected sheet
+    for col_idx, col_name in enumerate(df.columns, start=1):
+        sheet.cell(row=1, column=col_idx, value=col_name)
+
+    for row_idx, row in enumerate(df.itertuples(index=False), start=2):
+        for col_idx, value in enumerate(row, start=1):
+            sheet.cell(row=row_idx, column=col_idx, value=value)
+
     workbook.save(file_path)
-    st.success("File saved successfully!")
+    workbook.close()  # Close the file safely
 
 
 def excel_manager_ui(folder):
@@ -32,92 +48,152 @@ def excel_manager_ui(folder):
 
     excel_files = list_excels(folder)
 
-    if excel_files:
-        selected_excel = st.selectbox("Select an Excel file", excel_files)
-        file_path = os.path.join(folder, selected_excel)
+    if "selected_excel" not in st.session_state:
+        st.session_state.selected_excel = excel_files[0] if excel_files else None
+    if "selected_sheet" not in st.session_state:
+        st.session_state.selected_sheet = None
 
-        workbook = load_excel(file_path)
-        sheet_names = workbook.sheetnames
-        selected_sheet = st.selectbox("Select a Sheet", sheet_names)
-        sheet = workbook[selected_sheet]
+    # File Selection
+    selected_excel = st.selectbox("Select an Excel file", excel_files)
+    st.session_state.selected_excel = selected_excel
+    file_path = os.path.join(folder, selected_excel)
 
-        # Convert sheet to DataFrame
-        data = sheet.values
-        columns = next(data, [])  # Extract column names
-        df = pd.DataFrame(data, columns=columns) if columns else pd.DataFrame()
+    # Handle Excel reload when necessary
+    if "reload_excel" not in st.session_state:
+        st.session_state["reload_excel"] = False
 
-        # Editable Excel Table
-        edited_df = st.data_editor(df, num_rows="dynamic")
+    if st.session_state["reload_excel"]:
+        st.session_state["reload_excel"] = False
+        st.rerun()  # Full refresh to update viewer
 
-        # Sheet Operations
-        st.subheader("Sheet Operations")
-        sheet_col1, sheet_col2 = st.columns([2, 1])
-        with sheet_col1:
-            new_sheet_name = st.text_input("Enter new sheet name:", key="new_sheet_name")
-        with sheet_col2:
-            rename_sheet_name = st.text_input("Rename sheet:", key="rename_sheet_name")
+    # Load Workbook and Sheets
+    workbook = load_excel(file_path)
+    sheet_names = workbook.sheetnames
 
-        sheet_col3, sheet_col4, sheet_col5 = st.columns(3)
-        with sheet_col3:
-            if st.button("Add Sheet") and new_sheet_name:
-                if new_sheet_name not in workbook.sheetnames:
-                    workbook.create_sheet(title=new_sheet_name)
-                    save_excel(workbook, file_path)
-                else:
-                    st.warning("Sheet already exists!")
-        with sheet_col4:
-            if st.button("Delete Sheet"):
-                if len(workbook.sheetnames) > 1:
-                    workbook.remove(workbook[selected_sheet])
-                    save_excel(workbook, file_path)
-                else:
-                    st.warning("Cannot delete the last remaining sheet!")
-        with sheet_col5:
-            if st.button("Rename Sheet") and rename_sheet_name:
-                sheet.title = rename_sheet_name
-                save_excel(workbook, file_path)
+    # **Sheet Management**
+    st.subheader("Sheet Management")
+    col_add, col_delete, col_rename = st.columns(3)
 
-        # Column Operations
-        st.subheader("Column Operations")
-        col4, col5 = st.columns(2)
-        with col4:
-            new_col_name = st.text_input("Enter column name:", key="new_column_name")
-            if st.button("Add Column") and new_col_name:
-                edited_df[new_col_name] = ""
-        with col5:
-            columns_to_delete = st.multiselect("Select columns to delete", edited_df.columns)
-            if st.button("Delete Selected Columns") and columns_to_delete:
-                edited_df.drop(columns=columns_to_delete, inplace=True)
+    with col_add:
+        new_sheet_name = st.text_input("New Sheet Name:", key="new_sheet")
+        if st.button("Add Sheet"):
+            if new_sheet_name and new_sheet_name not in workbook.sheetnames:
+                workbook.create_sheet(title=new_sheet_name)
+                workbook.save(file_path)
+                st.rerun()
 
-        # Row Operations
-        st.subheader("Row Operations")
-        row_col1, row_col2 = st.columns(2)
-        with row_col1:
-            add_row_button = st.button("Add Row")
-        with row_col2:
-            row_to_delete = st.number_input("Enter row index to delete:", min_value=0,
-                                            max_value=max(len(edited_df) - 1, 0), step=1)
-            delete_row_button = st.button("Delete Selected Row")
+    with col_delete:
+        sheet_to_delete = st.selectbox("Select Sheet to Delete", sheet_names)
+        if st.button("Delete Sheet"):
+            if len(sheet_names) > 1:
+                workbook.remove(workbook[sheet_to_delete])
+                workbook.save(file_path)
+                st.rerun()
+            else:
+                st.warning("You cannot delete the last remaining sheet.")
 
-        if add_row_button:
-            edited_df.loc[len(edited_df)] = ["" for _ in range(len(edited_df.columns))]
+    with col_rename:
+        rename_from = st.selectbox("Select Sheet to Rename", sheet_names)
+        rename_to = st.text_input("Rename Sheet To:", key="rename_sheet")
+        if st.button("Rename Sheet"):
+            if rename_to and rename_to not in workbook.sheetnames:
+                sheet = workbook[rename_from]
+                sheet.title = rename_to
+                workbook.save(file_path)
+                st.rerun()
 
-        if delete_row_button:
-            edited_df.drop(index=row_to_delete, inplace=True)
+    # Sheet Selection
+    selected_sheet = st.selectbox("Select a Sheet", sheet_names)
+    st.session_state.selected_sheet = selected_sheet
+    sheet = workbook[selected_sheet]
 
-        # Save Changes
-        st.subheader("Save Changes")
-        if st.button("Save Changes"):
-            # Ensure sheet is cleared before writing new data
-            sheet.delete_rows(1, sheet.max_row)
+    # Extract data from the worksheet
+    data = list(sheet.iter_rows(values_only=True))
 
-            for col_idx, col_name in enumerate(edited_df.columns, start=1):
-                sheet.cell(row=1, column=col_idx, value=col_name)
-
-            for row_idx, row in enumerate(edited_df.itertuples(index=False), start=2):
-                for col_idx, value in enumerate(row, start=1):
-                    sheet.cell(row=row_idx, column=col_idx, value=value)
-
-            save_excel(workbook, file_path)
+    if not data:
+        df = pd.DataFrame(columns=["Column1"])
     else:
-        st.warning("No Excel files found in the folder.")
+        # Ensure column names are unique
+        seen = {}
+        new_columns = []
+        for col in list(data[0]) if data[0] else ["Column1"]:
+            if col in seen:
+                seen[col] += 1
+                new_columns.append(f"{col} ({seen[col]})")
+            else:
+                seen[col] = 0
+                new_columns.append(col)
+
+        df = pd.DataFrame(data[1:], columns=new_columns)
+
+    edited_df = st.data_editor(df, num_rows="dynamic", key=f"editor_{selected_excel}_{selected_sheet}")
+
+    # **Column Management**
+    st.subheader("Column Operations")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        new_col_name = st.text_input("New Column Name:", key="new_column")
+        if st.button("Add Column"):
+            if new_col_name and new_col_name not in edited_df.columns:
+                edited_df[new_col_name] = ""
+                save_excel(edited_df, file_path, selected_sheet)
+                st.rerun()
+
+    with col2:
+        columns_to_delete = st.multiselect("Select Columns to Delete", edited_df.columns)
+        if st.button("Delete Selected Columns"):
+            edited_df.drop(columns=columns_to_delete, inplace=True)
+            save_excel(edited_df, file_path, selected_sheet)
+            st.rerun()
+
+    with col3:
+        rename_col = st.selectbox("Select Column to Rename", edited_df.columns)
+        rename_col_new = st.text_input("Rename Column To:", key="rename_column")
+        if st.button("Rename Column"):
+            edited_df.rename(columns={rename_col: rename_col_new}, inplace=True)
+            save_excel(edited_df, file_path, selected_sheet)
+            st.rerun()
+
+    # **Row Management**
+    st.subheader("Row Operations")
+    col4, col5 = st.columns(2)
+    with col4:
+        if st.button("Add Row"):
+            edited_df.loc[len(edited_df)] = [""] * len(edited_df.columns)
+            save_excel(edited_df, file_path, selected_sheet)
+            st.rerun()
+
+    with col5:
+        row_to_delete = st.number_input("Enter Row Index to Delete", min_value=0, max_value=max(len(edited_df) - 1, 0))
+        if st.button("Delete Selected Row"):
+            edited_df.drop(index=row_to_delete, inplace=True)
+            edited_df.reset_index(drop=True, inplace=True)
+            save_excel(edited_df, file_path, selected_sheet)
+            st.rerun()
+
+    # **Push Column Values to First Row**
+    st.subheader("Push Column Values to First Row")
+    if st.button("Push Columns to First Row"):
+        if not df.empty:
+            # Copy first row values
+            first_row_values = df.iloc[0].copy()
+            new_row = pd.DataFrame([first_row_values], columns=df.columns)
+
+            # Move headers to first row and insert new row
+            df.iloc[0] = df.columns
+            df = pd.concat([df.iloc[:1], new_row, df.iloc[1:]]).reset_index(drop=True)
+
+            # Rename column names to "Column X" (X = count of non-empty column names)
+            non_empty_columns = sum(1 for col in df.columns if col.strip())  # Count non-empty column names
+            df.columns = [f"Column {i + 1}" for i in range(non_empty_columns)]  # Rename dynamically
+
+            # Save back to Excel
+            save_excel(df, file_path, selected_sheet)
+            st.success("Column values pushed and columns renamed to 'Column X'.")
+            st.rerun()
+
+    # Save Changes
+    st.subheader("Save Changes")
+    if st.button("Save Changes"):
+        save_excel(edited_df, file_path, selected_sheet)
+        st.success("Changes saved successfully!")
