@@ -1,59 +1,35 @@
+# excel_manager.py - Handles Excel file management
+
 import streamlit as st
 import pandas as pd
 import os
 
-def manage_excel(source_folder, selected_excel):
-    excel_path = os.path.join(source_folder, selected_excel)
-    excel_data = pd.ExcelFile(excel_path)
-    sheet_names = excel_data.sheet_names
+def list_excels(folder):
+    """Lists all Excel files in the given folder."""
+    return [f for f in os.listdir(folder) if f.endswith(('.xls', '.xlsx', '.csv'))]
 
-    selected_sheet = st.selectbox("Select Sheet", sheet_names)
+def excel_manager_ui(folder):
+    """Streamlit UI for managing Excel files."""
+    st.header("Excel Manager")
 
-    if selected_sheet not in st.session_state:
-        df = pd.read_excel(excel_data, sheet_name=selected_sheet)
-        st.session_state[selected_sheet] = df.copy()
+    if not os.path.exists(folder):
+        st.error(f"Folder '{folder}' not found.")
+        return
+
+    excel_files = list_excels(folder)
+
+    if excel_files:
+        selected_excel = st.selectbox("Select an Excel file", excel_files)
+        file_path = os.path.join(folder, selected_excel)
+
+        try:
+            df = pd.read_excel(file_path) if selected_excel.endswith(('.xls', '.xlsx')) else pd.read_csv(file_path)
+            st.dataframe(df)
+
+            if st.button("Download File"):
+                with open(file_path, "rb") as f:
+                    st.download_button("Download", f, file_name=selected_excel)
+        except Exception as e:
+            st.error(f"Error reading file: {e}")
     else:
-        df = st.session_state[selected_sheet]
-
-    # Modify Data
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("➕ Add Row"):
-            new_row = pd.DataFrame([[""] * len(df.columns)], columns=df.columns)
-            df = pd.concat([df, new_row], ignore_index=True)
-            st.session_state[selected_sheet] = df
-
-        if st.button("➕ Add Column"):
-            col_count = len(df.columns) + 1
-            while f"Column {col_count}" in df.columns:
-                col_count += 1
-            df[f"Column {col_count}"] = ""
-            st.session_state[selected_sheet] = df
-
-    with col2:
-        if len(df.index) > 0 and st.button("❌ Delete Last Row"):
-            df.drop(df.index[-1], inplace=True)
-            st.session_state[selected_sheet] = df
-
-        if len(df.columns) > 0:
-            col_to_delete = st.selectbox("Select Column to Delete:", df.columns)
-            if st.button("❌ Delete Column"):
-                df.drop(columns=[col_to_delete], inplace=True)
-                st.session_state[selected_sheet] = df
-
-    # Save Excel
-    if st.button("💾 Save Changes Without Deleting Other Sheets"):
-        with pd.ExcelFile(excel_path, engine="openpyxl") as existing_excel:
-            sheet_data = {sheet: pd.read_excel(existing_excel, sheet) for sheet in existing_excel.sheet_names}
-
-        sheet_data[selected_sheet] = df
-
-        with pd.ExcelWriter(excel_path, engine="openpyxl") as writer:
-            for sheet, data in sheet_data.items():
-                data.to_excel(writer, sheet_name=sheet, index=False)
-
-        st.success("✅ Changes Saved Without Deleting Other Sheets!")
-
-    # Display DataFrame
-    st.subheader("📊 Excel Viewer")
-    st.dataframe(st.session_state[selected_sheet])
+        st.warning("No Excel files found in the folder.")
